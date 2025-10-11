@@ -1,0 +1,196 @@
+name: Cloudflare IP 优选测速
+
+on:
+  schedule:
+    # 每天北京时间晚上4点 (UTC 12:00)
+    - cron: '0 20 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+permissions:
+  contents: write  # 允许创建 Release
+
+jobs:
+  speedtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 设置超时时间为2小时
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 设置 Python 环境
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        
+    - name: 安装依赖
+      run: |
+        pip install requests
+        
+    - name: 运行自动化测速脚本
+      run: |
+        python3 auto_speedtest.py
+        
+    - name: 显示生成的文件
+      run: |
+        echo "=== ip.txt 内容预览 ==="
+        if [ -f ip.txt ]; then
+          wc -l ip.txt
+          echo ""
+          head -20 ip.txt
+        else
+          echo "ip.txt 文件不存在"
+        fi
+        
+        echo ""
+        echo "=== pyip.txt 内容预览 ==="
+        if [ -f pyip.txt ]; then
+          wc -l pyip.txt
+          echo ""
+          head -20 pyip.txt
+        else
+          echo "pyip.txt 文件不存在"
+        fi
+        
+    - name: 创建 Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # 获取当前日期
+        DATE=$(TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M")
+        TAG="auto-$(TZ=Asia/Shanghai date +"%Y%m%d-%H%M")"
+        
+        # 统计IP数量
+        IP_COUNT=0
+        PYIP_COUNT=0
+        if [ -f ip.txt ]; then
+          IP_COUNT=$(grep -v '^#' ip.txt | grep -v '^$' | wc -l)
+        fi
+        if [ -f pyip.txt ]; then
+          PYIP_COUNT=$(grep -v '^#' pyip.txt | grep -v '^$' | wc -l)
+        fi
+        
+        # 创建 Release 说明
+        cat > release_notes.md << EOFNOTES
+        # 🚀 Cloudflare 优选 IP 自动更新
+        
+        **更新时间**: ${DATE} (北京时间)
+        
+        ## 📦 文件说明
+        
+        ### 📄 ip.txt (${IP_COUNT} 个IP)
+        - **格式**: \`IP:端口#国家中文名称\`
+        - **内容**: 优选的 Cloudflare IP 地址
+        - **来源**: 香港、日本、韩国、美国、新加坡五个地区测速结果
+        - **示例**: 
+          \`\`\`
+          104.16.1.1:443#香港
+          172.67.1.1:443#日本
+          \`\`\`
+        
+        ### 📄 pyip.txt (${PYIP_COUNT} 个IP)
+        - **格式**: \`IP:端口#国家中文名称\`
+        - **内容**: 优选的反代 IP 地址
+        - **来源**: 对优选IP进行二次测速验证
+        - **特点**: 经过双重筛选，质量更优
+        
+        ## 📊 测速参数
+        
+        | 参数 | 值 |
+        |------|-----|
+        | 测试配置 | **高质量测试** |
+        | IP数量 | **50个/地区** |
+        | 速度下限 | **5 MB/s** |
+        | 延迟上限 | **200 ms** |
+        | 测试地区 | HKG, JPN, KOR, USA, SIN |
+        
+        ## 🚀 使用方法
+        
+        ### 方法1：直接下载
+        \`\`\`bash
+        # 下载优选IP
+        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/ip.txt
+        
+        # 下载反代IP
+        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/pyip.txt
+        \`\`\`
+        
+        ### 方法2：使用最新版本链接
+        \`\`\`
+        优选IP: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/ip.txt
+        反代IP: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/pyip.txt
+        \`\`\`
+        
+        ### 方法3：在配置文件中使用
+        
+        #### Clash 配置示例
+        \`\`\`yaml
+        proxies:
+          - name: "CF-HK-1"
+            type: vmess
+            server: 104.16.1.1
+            port: 443
+        \`\`\`
+        
+        #### V2Ray 配置示例
+        \`\`\`json
+        {
+          "outbounds": [{
+            "protocol": "vmess",
+            "settings": {
+              "vnext": [{
+                "address": "104.16.1.1",
+                "port": 443
+              }]
+            }
+          }]
+        }
+        \`\`\`
+        
+        ## 📝 注意事项
+        
+        - ⏰ 每天北京时间 20:00 自动更新
+        - 🌍 IP质量可能因网络环境而异
+        - 🔄 建议定期更新使用最新版本
+        - 📊 反代IP (pyip.txt) 经过二次验证，推荐优先使用
+        
+        ## 📈 数据统计
+        
+        - 优选IP总数: ${IP_COUNT}
+        - 反代IP总数: ${PYIP_COUNT}
+        - 测试地区: 5个
+        - 测试总时长: 约15-30分钟
+        
+        ---
+        
+        **🤖 自动生成**: ${DATE} | **📦 版本**: ${TAG}
+        EOFNOTES
+        
+        # 替换变量
+        sed -i "s|\${DATE}|${DATE}|g" release_notes.md
+        sed -i "s|\${TAG}|${TAG}|g" release_notes.md
+        sed -i "s|\${GITHUB_REPOSITORY}|${GITHUB_REPOSITORY}|g" release_notes.md
+        sed -i "s|\${IP_COUNT}|${IP_COUNT}|g" release_notes.md
+        sed -i "s|\${PYIP_COUNT}|${PYIP_COUNT}|g" release_notes.md
+        
+        # 创建 Release
+        gh release create "${TAG}" \
+          --title "✨ 优选IP更新 ${DATE}" \
+          --notes-file release_notes.md \
+          ip.txt \
+          pyip.txt \
+          --repo "${GITHUB_REPOSITORY}"
+          
+    - name: 清理旧 Release (保留最近7个)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
+      run: |
+        # 保留最近7个 Release
+        gh release list --limit 100 --json tagName,createdAt \
+          --jq '.[] | select(.tagName | startswith("auto-")) | .tagName' \
+          | tail -n +8 \
+          | while read tag; do
+            echo "删除旧版本: $tag"
+            gh release delete "$tag" --yes --cleanup-tag || true
+          done
