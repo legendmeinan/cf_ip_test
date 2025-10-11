@@ -41,8 +41,8 @@ REGION_MAP = {
 
 # 高质量测试配置
 SPEEDTEST_CONFIG = {
-    'dn_count': '50',      # 测试50个IP
-    'speed_limit': '5',    # 下载速度下限 5 MB/s
+    'dn_count': '20',      # 测试50个IP
+    'speed_limit': '100',    # 下载速度下限 5 MB/s
     'time_limit': '200'    # 延迟上限 200 ms
 }
 
